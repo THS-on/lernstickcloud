@@ -1,11 +1,18 @@
+
 check_and_source_constants()
 {
 	if [ -e constants ]
 	then
 		. ./constants
+	if [ $CONSTANTS != "constants" ]
+	then 
+		. $CONSTANTS
+		echo "Using custom constants"
 	else
-		echo "Please copy the file \"constants.example\" to \"constants\" and adopt the settings to your build environment."
+		echo "Please copy the file \"constants.example\" to \"constants\" and adopt the settings to your build environment or specify a file 
+with \"--constants <file>\" or \"-c <file>\"."
 		exit
+	fi
 	fi
 }
 
@@ -28,52 +35,18 @@ configure()
 	echo ""
 }
 
-get_version_number()
-{
-	echo $1 | sed 's/.*_\(.*\)_.*/\1/' | sed 's/%3a/:/'
-}
-
-cache_cleanup()
-{
-	echo "removing deprecated packages from cache"
-	for DIR in cache/packages.*
-	do
-		echo "checking directory ${DIR}"
-		for FILE in ${DIR}/*
-		do
-			BASE_NAME=$(basename ${FILE})
-			PACKAGE_NAME=$(echo ${BASE_NAME} | sed 's/_.*//')
-			VERSIONS=$(ls ${DIR}/${PACKAGE_NAME}_*)
-			COUNTER=$(echo ${VERSIONS} | wc -w)
-			if [ ${COUNTER} -gt 1 ]
-			then
-				PACKAGE_VERSION="$(get_version_number ${BASE_NAME})"
-				for VERSION in ${VERSIONS}
-				do
-					OTHER_VERSION="$(get_version_number ${VERSION})"
-					if dpkg --compare-versions "${PACKAGE_VERSION}" lt "${OTHER_VERSION}"
-					then
-						echo "removing deprecated cache file ${FILE} (newer version ${OTHER_VERSION} found)"
-						rm ${FILE}
-						break
-					fi
-				done
-			fi
-		done
-	done
-}
-
 build_image()
 {
-	# update time stamp in bootloaders
+	# update time stamp in bootloaders Gfxboot does not work in docker 
 	# ISOLINUX/SYSLINUX
-	BOOTLOGO="config/bootloaders/isolinux/bootlogo"
-	BOOTLOGO_DIR="${BOOTLOGO}.dir"
-	cp templates/xmlboot.config ${BOOTLOGO_DIR}
- 	sed -i "s|<version its:translate=\"no\">.*</version>|<version its:translate=\"no\">(Version ${TODAY})</version>|1" \
-		${BOOTLOGO_DIR}/xmlboot.config
-	gfxboot --archive ${BOOTLOGO_DIR} --pack-archive ${BOOTLOGO}
-	cp ${BOOTLOGO} ${BOOTLOGO}.orig
+#	BOOTLOGO="config/bootloaders/isolinux/bootlogo"
+#	BOOTLOGO_DIR="${BOOTLOGO}.dir"
+#	cp templates/xmlboot.config ${BOOTLOGO_DIR}
+ #	sed -i "s|<version its:translate=\"no\">.*</version>|<version its:translate=\"no\">(Version ${TODAY})</version>|1" \
+#		${BOOTLOGO_DIR}/xmlboot.config
+#	gfxboot -v --archive ${BOOTLOGO_DIR} --pack-archive ${BOOTLOGO}
+#	cp ${BOOTLOGO} ${BOOTLOGO}.orig
+#	echo "gfxboot was successfully "
 	# GRUB
 	GRUB_THEME_DIR="config/includes.binary/boot/grub/themes/lernstick"
 	cp templates/theme.txt ${GRUB_THEME_DIR}
@@ -97,8 +70,8 @@ build_image()
                 --distribution jessie \
                 --iso-volume "lernstick${SYSTEM_SUFFIX} ${TODAY}" \
 		--firmware-chroot false \
-		--linux-flavours "686-pae-unsigned 686-unsigned" \
-		--linux-packages linux-image-4.7.0-1+lernstick.1 \
+		--linux-flavours "686-pae 686" \
+		--linux-packages linux-image-4.5.0-2+lernstick.1 \
                 --mirror-binary ${MIRROR_SYSTEM} \
                 --mirror-binary-security ${MIRROR_SECURITY_SYSTEM} \
                 --mirror-bootstrap ${MIRROR_BUILD} \
@@ -141,8 +114,6 @@ build_image()
 	else
 		echo "Error: ISO file was not build" | tee -a logfile.txt
 	fi
-
-	cache_cleanup
 
 	# When installing firmware-b43legacy-installer downloads.openwrt.org is
 	# sometimes down. Building doesn't fail in this situation but we would
